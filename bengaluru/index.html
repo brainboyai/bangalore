@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bengaluru Storm-Water Flood Intelligence</title>
+    
+    <!-- MapLibre GL JS -->
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    
+    <!-- Application Styles -->
+    <link href="./src/styles/app.css" rel="stylesheet" />
+</head>
+<body>
+
+<div class="app-container">
+    
+    <!-- Top Command Bar -->
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <h1>Bengaluru Storm-Water Flood Intelligence</h1>
+            <div class="subtitle">ADMIN COMMAND CENTRE</div>
+        </div>
+        
+        <div class="top-bar-center">
+            <div class="search-container" style="margin-right: 15px;">
+                <input type="text" id="global-search" placeholder="Search drain / lake / ward..." style="background: var(--color-panel-secondary); border: 1px solid var(--color-border); color: var(--color-text); padding: 6px 12px; border-radius: 4px; width: 250px; font-size: 12px; outline: none;" />
+            </div>
+            <div class="mode-toggle" id="app-mode-toggle">
+                <button class="mode-btn">LIVE</button>
+                <button class="mode-btn active">SIMULATION</button>
+            </div>
+            <div class="simulation-warning">SIMULATION MODE — DATA IS DEMONSTRATIVE</div>
+        </div>
+        
+        <div class="top-bar-right">
+            <div class="refresh-badge"><span class="indicator-dot"></span> Telemetry Sync: 1 min ago</div>
+            <div class="refresh-badge"><span class="indicator-dot" style="background-color: var(--color-info)"></span> Forecast Sync: 5 min ago</div>
+        </div>
+    </header>
+
+    <!-- Left Navigation -->
+    <nav class="left-nav">
+        <div class="nav-item active" onclick="document.getElementById('master-alerts-drawer').style.setProperty('display', 'none', 'important'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); this.classList.add('active');">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span class="nav-item-label">Overview</span>
+        </div>
+        <div class="nav-item">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 22 22 22"></polygon><line x1="12" y1="16" x2="12" y2="16"></line><line x1="12" y1="12" x2="12" y2="12"></line></svg>
+            <span class="nav-item-label">Risk Map</span>
+        </div>
+        <div class="nav-item" id="nav-alerts" style="position: relative;" onclick="document.getElementById('master-alerts-drawer').style.setProperty('display', 'flex', 'important'); document.getElementById('master-tracking-drawer').style.setProperty('display', 'none', 'important'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); this.classList.add('active');">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <span class="nav-item-label">Alerts</span>
+        </div>
+        <div class="nav-item" id="nav-tracking" style="position: relative;" onclick="document.getElementById('master-tracking-drawer').style.setProperty('display', 'flex', 'important'); document.getElementById('master-alerts-drawer').style.setProperty('display', 'none', 'important'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); this.classList.add('active');">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span class="nav-item-label">Tracking</span>
+        </div>
+        <div class="nav-item">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"></circle><line x1="12" y1="22" x2="12" y2="8"></line><path d="M5 12H2a10 10 0 0 0 20 0h-3"></path></svg>
+            <span class="nav-item-label">Network</span>
+        </div>
+        <div class="nav-item">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span class="nav-item-label">Replay</span>
+        </div>
+        <div class="nav-item">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span class="nav-item-label">Admin</span>
+        </div>
+    </nav>
+    <!-- Center Map View -->
+    <main class="center-map-container" style="position: relative; width: 100%; height: 100%; overflow: hidden;">
+        
+        <div id="map" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 1;"></div>
+        
+
+        
+        <!-- City KPI Strip -->
+        <div class="kpi-strip">
+            <div class="kpi-card" data-filter="critical-drains" id="filter-critical-drains">
+                <div class="kpi-value" id="kpi-critical-drains">0</div>
+                <div class="kpi-label">CRITICAL DRAINS</div>
+            </div>
+            <div class="kpi-card" data-filter="watch-drains" id="filter-watch-drains">
+                <div class="kpi-value" id="kpi-watch-drains">0</div>
+                <div class="kpi-label">WATCH DRAINS</div>
+            </div>
+            <div class="kpi-card" data-filter="lakes-risk" id="filter-lakes-risk">
+                <div class="kpi-value" id="kpi-lakes-risk">0</div>
+                <div class="kpi-label">LAKES AT RISK</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-hotspots">0</div>
+                <div class="kpi-label">PREDICTED HOTSPOTS</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-alerts">0</div>
+                <div class="kpi-label">ACTIVE ALERTS</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value" id="kpi-sensors">94%</div>
+                <div class="kpi-label">SENSORS ONLINE</div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="map-legend">
+            <div class="legend-col">
+                <strong>DRAIN STATUS</strong>
+                <div><span class="dot bg-normal"></span> NORMAL</div>
+                <div><span class="dot bg-watch"></span> WATCH</div>
+                <div><span class="dot bg-critical"></span> CRITICAL</div>
+            </div>
+            <div class="legend-col">
+                <strong>LAKE STATUS</strong>
+                <div><span class="dot bg-lake"></span> NORMAL</div>
+                <div><span class="dot bg-watch"></span> WATCH</div>
+                <div><span class="dot bg-critical"></span> CRITICAL</div>
+            </div>
+            <div class="legend-col">
+                <strong>MARKERS</strong>
+                <div><span class="dot bg-sensor"></span> SENSOR</div>
+                <div><span class="triangle bg-alert"></span> ALERT</div>
+            </div>
+        </div>
+
+        <!-- Weather Widget -->
+        <div class="weather-widget">
+            <div class="weather-header">CURRENT STORM <span class="badge">SIMULATED</span></div>
+            <div class="weather-row">
+                <span>Rainfall</span><strong id="w-rain">48 mm/hr</strong>
+            </div>
+            <div class="weather-row">
+                <span>Forecast +30 min</span><strong id="w-f30">62 mm/hr</strong>
+            </div>
+            <div class="weather-row">
+                <span>Forecast +60 min</span><strong id="w-f60">74 mm/hr</strong>
+            </div>
+            <div class="weather-row">
+                <span>Trend</span><strong id="w-trend" style="color:var(--color-critical)">↑ Intensifying</strong>
+            </div>
+            <div class="weather-row">
+                <span>Storm severity</span><strong id="w-sev" class="badge-severe">HEAVY</strong>
+            </div>
+        </div>
+
+
+        <!-- Layers Hover Dropdown -->
+        <div class="layer-control-dropdown" style="position: absolute; top: 20px; right: 20px; z-index: 9999; pointer-events: auto;">
+            <button class="layer-icon-btn" style="width: 36px; height: 36px; cursor: pointer; background: #0B1728; border: 1px solid #1B2D44; border-radius: 4px; color: #E7EEF7; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>
+            </button>
+            <div class="layer-control-content" style="display: none; position: absolute; right: 0; top: 44px; background: #0B1728; padding: 12px; border: 1px solid #1B2D44; border-radius: 6px; width: max-content; color: #E7EEF7; font-size: 12px;">
+                <label style="display: block; margin-bottom: 8px;"><input type="checkbox" id="toggle-subbasins" checked> Sub-valleys</label>
+                <label style="display: block; margin-bottom: 8px;"><input type="checkbox" id="toggle-lakes" checked> Lakes</label>
+                <label style="display: block; margin-bottom: 8px;"><input type="checkbox" id="toggle-secondary-drains" checked> Secondary Drains</label>
+                <label style="display: block; margin-bottom: 8px;"><input type="checkbox" id="toggle-primary-drains" checked> Primary Drains</label>
+                <label style="display: block; margin-bottom: 8px;"><input type="checkbox" id="toggle-sensors" checked> Sensor Network</label>
+            </div>
+        </div>
+    </main>
+
+    <!-- Right Detail Panel -->
+    <aside class="right-panel" id="detail-panel">
+        <div class="panel-header">DETAIL PANEL</div>
+        <div class="panel-content">
+            <p style="color: var(--color-text-muted); font-size: 13px;">Select an infrastructure asset on the map to view predicted simulation details.</p>
+        </div>
+    </aside>
+
+    <!-- Bottom Timeline Bar -->
+    <footer class="bottom-bar" id="timeline-bar">
+        <div class="timeline-controls">
+            <div class="scenario-wrapper">
+                <label>Scenario:</label>
+                <select id="scenario-selector">
+                    <option value="NORMAL">Normal Rain</option>
+                    <option value="HEAVY" selected>Heavy Monsoon</option>
+                    <option value="EXTREME">Extreme Storm</option>
+                </select>
+            </div>
+            <button id="play-pause-btn" class="play-btn">▶ Play</button>
+        </div>
+        
+        <div class="timeline-scrubber">
+            <input type="range" id="time-slider" min="0" max="4" step="1" value="0">
+            <div class="timeline-labels">
+                <span class="active">NOW</span>
+                <span>+15 MIN</span>
+                <span>+30 MIN</span>
+                <span>+60 MIN</span>
+                <span>+120 MIN</span>
+            </div>
+        </div>
+    </footer>
+
+</div>
+
+<!-- Application Logic -->
+<script type="module" src="./src/ui/map.js"></script>
+
+<script src="./src/ui/ui-fixes.js"></script>
+<!-- Alerts Drawer (Fixed Overlay) -->
+<div class="alerts-drawer" id="master-alerts-drawer" style="position: fixed; top: 60px; left: 80px; bottom: 0; width: 350px; background-color: #0B1728; border-right: 1px solid #1B2D44; z-index: 99999; display: none; flex-direction: column; box-shadow: 4px 0 15px rgba(0,0,0,0.5);">
+    <div class="alerts-header" style="padding: 16px; border-bottom: 1px solid #1B2D44; display: flex; justify-content: space-between; align-items: center; color: #E7EEF7;">
+        <h2 style="margin: 0; font-size: 14px;">ACTIVE INCIDENTS</h2>
+        <div id="close-alerts" style="cursor: pointer; color: #8EA2B8; font-size: 16px;" onclick="document.getElementById('master-alerts-drawer').style.setProperty('display', 'none', 'important');">✕</div>
+    </div>
+    <div id="alerts-tabs" style="display:flex; border-bottom: 1px solid #1B2D44;">
+        <div id="tab-critical" onclick="window.alertSystem.setTab('CRITICAL')" style="flex:1; padding:10px; text-align:center; font-size:12px; cursor:pointer; background:#1B2D44; color:#FF4444; font-weight:bold;">CRITICAL</div>
+        <div id="tab-watch" onclick="window.alertSystem.setTab('WATCH')" style="flex:1; padding:10px; text-align:center; font-size:12px; cursor:pointer; color:#8EA2B8; font-weight:bold;">WATCH</div>
+    </div>
+    <div class="alerts-list" id="alerts-list" style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="color: #8EA2B8; font-size: 12px; text-align: center; margin-top: 20px;">No active alerts.</div>
+    </div>
+</div>
+
+<style>
+@keyframes breathe { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 10px #FF4444; } 100% { transform: scale(1); opacity: 0.8; } }
+.badge-breathe { animation: breathe 1.5s infinite ease-in-out; }
+</style>
+
+<div id="alert-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:999999; justify-content:center; align-items:center;">
+    <div style="background:#0B1728; border: 1px solid #1B2D44; padding:24px; border-radius:8px; max-width:400px; color:#E7EEF7; text-align:center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <h3 id="alert-modal-title" style="margin-top:0; color:#00FFFF; margin-bottom: 12px;">Simulated Action</h3>
+        <p id="alert-modal-desc" style="font-size:14px; color:#8EA2B8; margin-bottom:24px;"></p>
+        <div style="display:flex; justify-content:center; gap:12px;">
+            <button id="alert-modal-cancel" style="background:transparent; border:1px solid #8EA2B8; color:#8EA2B8; padding:8px 24px; border-radius:4px; cursor:pointer; font-weight:bold;">Cancel</button>
+            <button id="alert-modal-ok" style="background:#00FFFF; border:none; color:#0B1728; padding:8px 24px; border-radius:4px; cursor:pointer; font-weight:bold;">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="alerts-drawer" id="master-tracking-drawer" style="position: fixed; top: 60px; left: 80px; bottom: 0; width: 350px; background-color: #0B1728; border-right: 1px solid #1B2D44; z-index: 99999; display: none; flex-direction: column; box-shadow: 4px 0 15px rgba(0,0,0,0.5);">
+    <div class="alerts-header" style="padding: 16px; border-bottom: 1px solid #1B2D44; display: flex; justify-content: space-between; align-items: center; color: #E7EEF7;">
+        <h2 style="margin: 0; font-size: 14px;">INCIDENT TRACKING</h2>
+        <div onclick="document.getElementById('master-tracking-drawer').style.setProperty('display', 'none', 'important'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));" style="cursor: pointer; color: #8EA2B8; font-size: 16px;">✕</div>
+    </div>
+    <div class="alerts-list" id="tracking-list" style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px;"></div>
+</div>
+
+</body>
+</html>
